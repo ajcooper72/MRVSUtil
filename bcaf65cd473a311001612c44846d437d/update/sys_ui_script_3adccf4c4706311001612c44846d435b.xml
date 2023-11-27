@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_ui_script">
+    <sys_ui_script action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <description>Library to watch multi-row variable sets for changes.  Uses MutationObserver.&#13;
+&#13;
+Use in a onLoad client script (Isolate script = false)&#13;
+&#13;
+function onLoad() {&#13;
+	&#13;
+    setTimeout(function() {&#13;
+        var mrvsName = ''name of multi-row-variable-set'';&#13;
+        var mrvs = (g_form.getControl(mrvsName).id) ?&#13;
+            new MRVSWatcherUtil(mrvsName, this.window) : new MRVSWatcherUtilSP(mrvsName, this.window);&#13;
+&#13;
+        var observer = new MutationObserver(function(mutationList, observer) {&#13;
+            var modifiedData = mrvs.getRowUpdates(false);&#13;
+            if (modifiedData) {&#13;
+                 // do something with the data&#13;
+                 console.log(JSON.stringify(modifiedData, '', 3));&#13;
+            }&#13;
+        });&#13;
+&#13;
+        // create the observer looking for changes to the contents of the MRVS&#13;
+        observer.observe(mrvs.getTableID(), mrvs.OBSERVER_CONFIG);&#13;
+&#13;
+    }, 1000);&#13;
+&#13;
+}</description>
+        <global>false</global>
+        <ignore_in_now_experience>false</ignore_in_now_experience>
+        <name>MRVSWatcherUtilSP</name>
+        <script><![CDATA[// this is here as otherwise it fails when loading in the portal.
+var Class = Class || {
+    create: function() {
+        return function() {
+            if (this.initialize)
+                this.initialize.apply(this, arguments);
+        };
+    }
+};
+
+var MRVSWatcherUtilSP = Class.create();
+
+MRVSWatcherUtilSP.prototype = {
+    /*
+     * initialise the MRVSWatcherUtilSP instance
+     * @param {String} sys_id of multi-row variable set to watch
+     * @param {object} window object from browser (this.window)
+     */
+    initialize: function(mrvsName, window) {
+        this.table = window.$('div#' + mrvsName).find("table");
+        this.window = window;
+        this.currentRows = this._getRowData();
+        this.columnNames = this._getColumnNames();
+    },
+
+    /*
+     * Scan the table and extract all the data rows
+     * We're only interested in the data that is flagged as id-question-xx in the header
+     */
+    _getRowData: function() {
+        var rowData = [];
+        var columnNames = this.columnNames; // make a local copy as we'll lose 'this' in a minute
+        var tbody = this.table.find("tbody");
+        tbody.find("tr").each(function() {
+            var columns = $(this).find("td[headers^=id-question-]");
+            var columnData = {};
+            for (var _col = 0; _col < columns.length; _col++) {
+                columnData[columnNames[_col]] = columns[_col].innerText;
+            }
+            if (Object.keys(columnData).length > 0) {
+                rowData.push(JSON.stringify(columnData));
+            }
+
+        });
+        return rowData;
+    },
+
+    /*
+     * Get the table ID for the multi-row variable set
+     * @return {string} (sys_id)_table
+     */
+    getTableID: function() {
+        return this.table[0];
+    },
+
+    /*
+     * get list of column names
+     * used when building the modified data JSON
+     */
+    _getColumnNames: function() {
+        var columnNames = [];
+        var headers = this.table.find("th[id^=id-question-]");
+        for (var _col = 0; _col < headers.length; _col++) {
+            columnNames.push(headers[_col].innerText);
+        }
+
+        return columnNames;
+    },
+
+    // EVERYTHING BELOW HERE IS COMMON WITH THE MRVSWatcherUtil UI SCRIPT USED BY THE PLATFORM
+    // UPDATE THAT SCRIPT AS WELL WITH ANY CHANGES
+
+    /*
+     * Scan the table to check for any updates/deletes/additions
+     * @param {boolean} includeAllData - return the full set of rows in the response (default false)
+     * @returns {JSON} Array of updates
+     */
+    getRowUpdates: function(includeAllData) {
+        includeAllData = includeAllData || false;
+        var updatedRows = this._getRowData();
+
+        // check for any changes to the table
+        var additions = this._getAdditions(updatedRows);
+        var removals = this._getRemovals(updatedRows);
+
+        // if no changes made then just return, caller will have to handle undefined response
+        if ((!additions || additions.length == 0) && (!removals || removals.length == 0)) return;
+
+        this.currentRows = updatedRows;
+
+        var rowData = {};
+
+        if (additions.length && removals.length) {
+            // field updated
+            rowData["updated"] = {
+                "previous": JSON.parse(removals[0]),
+                "current": JSON.parse(additions[0])
+            };
+        } else if (additions.length) {
+            rowData["added"] = JSON.parse(additions[0]);
+        } else if (removals.length) {
+            rowData["removed"] = removals.map(function(_removal) {
+                return JSON.parse(_removal);
+            });
+        }
+
+        // add the full row data set
+        if (includeAllData) {
+            rowData["rows"] = {
+                "count": this.currentRows.length,
+                "data": this.currentRows.map(function(_x) {
+                    return JSON.parse(_x);
+                })
+            };
+        }
+
+        return rowData;
+    },
+
+    _getAdditions: function(updatedRows) {
+        var diffs = updatedRows.diff(this.currentRows);
+        return diffs;
+    },
+
+    _getRemovals: function(updatedRows) {
+        var diffs = this.currentRows.diff(updatedRows);
+        return diffs;
+    },
+
+    // Default configuration for the MutationObserver
+    OBSERVER_CONFIG: {
+        subtree: true,
+        childList: true
+    },
+
+};
+
+// add a diff method to the Array object
+Array.prototype.diff = function(arr) {
+    return this.filter(function(_item) {
+        return arr.indexOf(_item) < 0;
+    });
+};]]></script>
+        <script_name/>
+        <sys_class_name>sys_ui_script</sys_class_name>
+        <sys_created_by>aidan.cooper</sys_created_by>
+        <sys_created_on>2023-10-18 09:17:32</sys_created_on>
+        <sys_id>3adccf4c4706311001612c44846d435b</sys_id>
+        <sys_mod_count>146</sys_mod_count>
+        <sys_name>MRVSWatcherUtilSP</sys_name>
+        <sys_package display_value="GeneralUtils" source="0e3338441b18811001e40d82604bcbd3">0e3338441b18811001e40d82604bcbd3</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="MRVS Watcher">bcaf65cd473a311001612c44846d437d</sys_scope>
+        <sys_update_name>sys_ui_script_3adccf4c4706311001612c44846d435b</sys_update_name>
+        <sys_updated_by>aidan.cooper</sys_updated_by>
+        <sys_updated_on>2023-11-27 11:57:03</sys_updated_on>
+        <ui_type>1</ui_type>
+        <use_scoped_format>false</use_scoped_format>
+    </sys_ui_script>
+    <sys_claim action="INSERT_OR_UPDATE">
+        <claim_owner_scope display_value="MRVS Watcher">bcaf65cd473a311001612c44846d437d</claim_owner_scope>
+        <claim_timestamp>18c109f222b0000001</claim_timestamp>
+        <metadata_update_name>sys_ui_script_3adccf4c4706311001612c44846d435b</metadata_update_name>
+        <previous_claim_app_version>1.0.0</previous_claim_app_version>
+        <previous_claim_name>MRVS Watcher</previous_claim_name>
+        <previous_claim_scope>bcaf65cd473a311001612c44846d437d</previous_claim_scope>
+        <sys_created_by>aidan.cooper</sys_created_by>
+        <sys_created_on>2023-11-27 11:51:53</sys_created_on>
+        <sys_id>37dfe5cd473a311001612c44846d43ba</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>aidan.cooper</sys_updated_by>
+        <sys_updated_on>2023-11-27 11:51:53</sys_updated_on>
+    </sys_claim>
+</record_update>
