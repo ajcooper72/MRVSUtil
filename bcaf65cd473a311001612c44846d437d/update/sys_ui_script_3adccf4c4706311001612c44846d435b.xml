@@ -45,14 +45,18 @@ MRVSWatcherUtilSP.prototype = {
     /*
      * initialise the MRVSWatcherUtilSP instance
      * @param {String} sys_id of multi-row variable set to watch
-     * @param {object} window object from browser (this.window)
+     * @param {object} window object from browser
+     * @param {object} gform copy of the g_form object so that we can query the form
      */
-    initialize: function(mrvsName, window) {
-        this.table = window.$('div#' + mrvsName).find("table");
-        this.window = window;
+    initialize: function(mrvsName, window, gform) {
+        this.mrvsName = mrvsName;
+        this.g_form = gform;
+        this.tableID = window.$('div#' + mrvsName).find("table")[0];
         this.currentRows = this._getRowData();
-        this.columnNames = this._getColumnNames();
     },
+
+    // EVERYTHING BELOW HERE IS COMMON WITH THE MRVSWatcherUtil UI SCRIPT USED BY THE PLATFORM
+    // UPDATE THAT SCRIPT AS WELL WITH ANY CHANGES
 
     /*
      * Scan the table and extract all the data rows
@@ -60,19 +64,17 @@ MRVSWatcherUtilSP.prototype = {
      */
     _getRowData: function() {
         var rowData = [];
-        var columnNames = this.columnNames; // make a local copy as we'll lose 'this' in a minute
-        var tbody = this.table.find("tbody");
-        tbody.find("tr").each(function() {
-            var columns = $(this).find("td[headers^=id-question-]");
-            var columnData = {};
-            for (var _col = 0; _col < columns.length; _col++) {
-                columnData[columnNames[_col]] = columns[_col].innerText;
-            }
-            if (Object.keys(columnData).length > 0) {
-                rowData.push(JSON.stringify(columnData));
-            }
+        var mrvsData = this.g_form.getValue(this.mrvsName);
+        mrvsData = mrvsData == '' ? [] : JSON.parse(mrvsData);
 
-        });
+        rowData = mrvsData.map(function(_row) {
+            // sort the object by keys first so that we keep a predictable data set
+            // sometimes the return MRVS data has the keys in different orders
+            _row = this._sortObjectByKey(_row);
+
+            return JSON.stringify(_row);
+        }, this);
+
         return rowData;
     },
 
@@ -81,25 +83,8 @@ MRVSWatcherUtilSP.prototype = {
      * @return {string} (sys_id)_table
      */
     getTableID: function() {
-        return this.table[0];
+        return this.tableID;
     },
-
-    /*
-     * get list of column names
-     * used when building the modified data JSON
-     */
-    _getColumnNames: function() {
-        var columnNames = [];
-        var headers = this.table.find("th[id^=id-question-]");
-        for (var _col = 0; _col < headers.length; _col++) {
-            columnNames.push(headers[_col].innerText);
-        }
-
-        return columnNames;
-    },
-
-    // EVERYTHING BELOW HERE IS COMMON WITH THE MRVSWatcherUtil UI SCRIPT USED BY THE PLATFORM
-    // UPDATE THAT SCRIPT AS WELL WITH ANY CHANGES
 
     /*
      * Scan the table to check for any updates/deletes/additions
@@ -158,6 +143,26 @@ MRVSWatcherUtilSP.prototype = {
         return diffs;
     },
 
+    /*
+     * sort the given object based on the keys
+     */
+    _sortObjectByKey: function (jsonObj) {
+        var sortedJSON = {};
+        var keys = [];
+    
+        for (var key in jsonObj) {
+            if (jsonObj.hasOwnProperty(key)) {
+                keys.push(key);
+            }
+        }
+    
+        keys.sort().forEach(function(_key) {
+            sortedJSON[_key] = jsonObj[_key];
+        });
+    
+        return sortedJSON;
+    },
+
     // Default configuration for the MutationObserver
     OBSERVER_CONFIG: {
         subtree: true,
@@ -177,14 +182,14 @@ Array.prototype.diff = function(arr) {
         <sys_created_by>aidan.cooper</sys_created_by>
         <sys_created_on>2023-10-18 09:17:32</sys_created_on>
         <sys_id>3adccf4c4706311001612c44846d435b</sys_id>
-        <sys_mod_count>146</sys_mod_count>
+        <sys_mod_count>155</sys_mod_count>
         <sys_name>MRVSWatcherUtilSP</sys_name>
         <sys_package display_value="GeneralUtils" source="0e3338441b18811001e40d82604bcbd3">0e3338441b18811001e40d82604bcbd3</sys_package>
         <sys_policy/>
         <sys_scope display_value="MRVS Watcher">bcaf65cd473a311001612c44846d437d</sys_scope>
         <sys_update_name>sys_ui_script_3adccf4c4706311001612c44846d435b</sys_update_name>
         <sys_updated_by>aidan.cooper</sys_updated_by>
-        <sys_updated_on>2023-11-27 11:57:03</sys_updated_on>
+        <sys_updated_on>2023-11-28 14:12:24</sys_updated_on>
         <ui_type>1</ui_type>
         <use_scoped_format>false</use_scoped_format>
     </sys_ui_script>

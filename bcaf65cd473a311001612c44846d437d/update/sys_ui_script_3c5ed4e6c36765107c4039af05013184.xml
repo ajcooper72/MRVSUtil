@@ -10,7 +10,7 @@ function onLoad() {&#13;
     setTimeout(function() {&#13;
         var mrvsName = ''name of multi-row-variable-set'';&#13;
         var mrvs = (g_form.getControl(mrvsName).id) ?&#13;
-            new MRVSWatcherUtil(mrvsName, this.window) : new MRVSWatcherUtilSP(mrvsName, this.window);&#13;
+            new MRVSWatcherUtil(mrvsName) : new MRVSWatcherUtilSP(mrvsName, this.window, g_form);&#13;
 &#13;
         var observer = new MutationObserver(function(mutationList, observer) {&#13;
             var modifiedData = mrvs.getRowUpdates(false);&#13;
@@ -37,40 +37,32 @@ MRVSWatcherUtil.prototype = {
      * initialise the MRVSWatcherUtil instance
      * @param {String} Name of multi-row variable set to watch
      */
-    initialize: function(mrvsName, window) {
-        this.window = window;
-        this.mrvsID = g_form.getControl(mrvsName).id.replace(/(.*:)/, '');
-        this.table = document.getElementById(this.mrvsID + "_table");
-        this.columnNames = this._getColumnNames();
+    initialize: function(mrvsName) {
+        this.mrvsName = mrvsName;
+        var mrvsID = g_form.getControl(mrvsName).id.replace(/(.*:)/, '');
+        this.tableID = $([mrvsID, "table"].join('_'));
         this.currentRows = this._getRowData();
     },
 
+    // EVERYTHING BELOW HERE IS COMMON WITH THE MRVSWatcherUtilSP UI SCRIPT USED BY THE PORTAL
+    // UPDATE THAT SCRIPT AS WELL WITH ANY CHANGES
+
     /*
-     * Scan the table and extract all the data rows
-     * ignore the actions column (assumed to not be td class 'vt')
+     * Get the MRVS value and store in a usable format
+     * basically, sorted and stringified so that we can easily find changes later on
      */
     _getRowData: function() {
         var rowData = [];
-        var tbody = this.table.getElementsByTagName('tbody')[0];
-        var rows = tbody.getElementsByTagName('tr');
-        for (var _row = 0; _row < rows.length; _row++) {
-            var columns = rows[_row].getElementsByTagName('td');
+        var mrvsData = g_form.getValue(this.mrvsName);
+        mrvsData = mrvsData == '' ? [] : JSON.parse(mrvsData);
 
-            if (columns.length == this.columnNames.length) {
-                var columnData = {};
-                for (var _col = 0; _col < columns.length; _col++) {
-                    if (columns[_col].className == 'vt') {
-                        // only add columns with the className vt, this indicates a proper column
-                        // rather than just the row actions (add/delete)
-                        columnData[this.columnNames[_col]] = columns[_col].innerText;
-                    }
+        rowData = mrvsData.map(function(_row) {
+            // sort the object by keys first so that we keep a predictable data set
+            // sometimes the return MRVS data has the keys in different orders
+            _row = this._sortObjectByKey(_row);
 
-                }
-                if (Object.keys(columnData).length > 0) {
-                    rowData.push(JSON.stringify(columnData));
-                }
-            }
-        }
+            return JSON.stringify(_row);
+        }, this);
 
         return rowData;
     },
@@ -80,26 +72,8 @@ MRVSWatcherUtil.prototype = {
      * @return {string} (sys_id)_table
      */
     getTableID: function() {
-        return $([this.mrvsID, "table"].join('_'));
+        return this.tableID;
     },
-
-    /*
-     * get list of column names
-     * used when building the modified data JSON
-     */
-    _getColumnNames: function() {
-        var columnNames = [];
-        var thead = this.table.getElementsByTagName('thead')[0];
-        var headers = thead.getElementsByTagName('th');
-        for (var _col = 0; _col < headers.length; _col++) {
-            columnNames.push(headers[_col].innerText);
-        }
-
-        return columnNames;
-    },
-
-    // EVERYTHING BELOW HERE IS COMMON WITH THE MRVSWatcherUtilSP UI SCRIPT USED BY THE PORTAL
-    // UPDATE THAT SCRIPT AS WELL WITH ANY CHANGES
 
     /*
      * Scan the table to check for any updates/deletes/additions
@@ -157,6 +131,26 @@ MRVSWatcherUtil.prototype = {
         return diffs;
     },
 
+    /*
+     * sort the given object based on the keys
+     */
+    _sortObjectByKey: function (jsonObj) {
+        var sortedJSON = {};
+        var keys = [];
+    
+        for (var key in jsonObj) {
+            if (jsonObj.hasOwnProperty(key)) {
+                keys.push(key);
+            }
+        }
+    
+        keys.sort().forEach(function(_key) {
+            sortedJSON[_key] = jsonObj[_key];
+        });
+    
+        return sortedJSON;
+    },
+
     // Default configuration for the MutationObserver
     OBSERVER_CONFIG: {
         subtree: true,
@@ -176,14 +170,14 @@ Array.prototype.diff = function(arr) {
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2023-06-23 08:26:56</sys_created_on>
         <sys_id>3c5ed4e6c36765107c4039af05013184</sys_id>
-        <sys_mod_count>135</sys_mod_count>
+        <sys_mod_count>145</sys_mod_count>
         <sys_name>MRVSWatcherUtil</sys_name>
         <sys_package display_value="Global" source="global">global</sys_package>
         <sys_policy/>
         <sys_scope display_value="MRVS Watcher">bcaf65cd473a311001612c44846d437d</sys_scope>
         <sys_update_name>sys_ui_script_3c5ed4e6c36765107c4039af05013184</sys_update_name>
         <sys_updated_by>aidan.cooper</sys_updated_by>
-        <sys_updated_on>2023-11-27 11:53:57</sys_updated_on>
+        <sys_updated_on>2023-11-28 14:17:31</sys_updated_on>
         <ui_type>0</ui_type>
         <use_scoped_format>false</use_scoped_format>
     </sys_ui_script>
